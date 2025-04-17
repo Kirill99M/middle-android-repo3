@@ -25,6 +25,7 @@ import ru.yandex.architectureproject.presentation.state.TaskAction.CreateTask
 import ru.yandex.architectureproject.presentation.state.TaskAction.DeleteTask
 import ru.yandex.architectureproject.presentation.state.TaskAction.UpdateTask
 import ru.yandex.architectureproject.presentation.state.TaskState
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.coroutineContext
 
 class TaskViewModel(
@@ -36,8 +37,9 @@ class TaskViewModel(
     private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
-    private val taskForDeletionJobMap: MutableMap<Int, Job?> = mutableMapOf()
+    private val taskForDeletionJobMap: ConcurrentHashMap<Int, Job?> = ConcurrentHashMap()
     private val _state = MutableStateFlow<TaskState>(TaskState.Loading)
+    private var collectJob: Job? = null
     val state: StateFlow<TaskState> = _state.asStateFlow()
 
     init {
@@ -74,7 +76,9 @@ class TaskViewModel(
     }
 
     private suspend fun handleLoadTasks() {
+        collectJob?.cancel()
         withContext(ioDispatcher) {
+            collectJob = this.coroutineContext.job
             getAllTasksUseCase()
                 .distinctUntilChanged()
                 .onStart { _state.value = TaskState.Loading }
