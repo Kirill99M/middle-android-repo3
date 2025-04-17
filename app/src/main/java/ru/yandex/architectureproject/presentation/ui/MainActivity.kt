@@ -34,6 +34,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import ru.yandex.architectureproject.data.model.Task
 import ru.yandex.architectureproject.presentation.state.TaskAction
+import ru.yandex.architectureproject.presentation.state.TaskAction.DeleteTask
+import ru.yandex.architectureproject.presentation.state.TaskAction.CreateTask
+import ru.yandex.architectureproject.presentation.state.TaskAction.UpdateTask
 import ru.yandex.architectureproject.presentation.state.TaskState
 import ru.yandex.architectureproject.presentation.ui.theme.ArchitectureProjectTheme
 import ru.yandex.architectureproject.presentation.viewmodel.TaskViewModel
@@ -70,7 +73,7 @@ class MainActivity : ComponentActivity() {
 
                 is TaskState.Loaded -> {
                     val tasks = (state as TaskState.Loaded).tasks
-                    TodoList(tasks = tasks, onAction = { action -> viewModel.reduce(action) })
+                    TodoList(tasks = tasks, onAction = viewModel::reduce)
                 }
 
                 is TaskState.Error -> Text(text = (state as TaskState.Error).message)
@@ -96,7 +99,7 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(onClick = {
                     if (taskText.value.isNotBlank()) {
-                        onAction(TaskAction.AddTask(taskText.value))
+                        onAction(CreateTask(taskText.value))
                         taskText.value = ""
                     }
                 }) {
@@ -122,7 +125,7 @@ class MainActivity : ComponentActivity() {
                                 checked = task.isDone,
                                 onCheckedChange = {
                                     onAction(
-                                        TaskAction.UpdateTaskStatus(
+                                        UpdateTask(
                                             task.id,
                                             it
                                         )
@@ -130,7 +133,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Button(onClick = { onAction(TaskAction.DeleteTask(task.id)) }) {
+                            Button(onClick = { onAction(DeleteTask(task.id)) }) {
                                 Text("Удалить")
                             }
                         }
