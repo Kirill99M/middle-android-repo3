@@ -3,7 +3,6 @@ package ru.yandex.architectureproject.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,20 +12,18 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import ru.yandex.architectureproject.domain.AddTaskUseCase
 import ru.yandex.architectureproject.domain.CompleteTaskUseCase
 import ru.yandex.architectureproject.domain.DeleteTaskUseCase
 import ru.yandex.architectureproject.domain.GetAllTasksUseCase
 import ru.yandex.architectureproject.domain.IncompleteTaskUseCase
 import ru.yandex.architectureproject.presentation.state.TaskAction
-import ru.yandex.architectureproject.presentation.state.TaskAction.LoadTasks
 import ru.yandex.architectureproject.presentation.state.TaskAction.CreateTask
 import ru.yandex.architectureproject.presentation.state.TaskAction.DeleteTask
+import ru.yandex.architectureproject.presentation.state.TaskAction.LoadTasks
 import ru.yandex.architectureproject.presentation.state.TaskAction.UpdateTask
 import ru.yandex.architectureproject.presentation.state.TaskState
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.coroutines.coroutineContext
 
 class TaskViewModel(
     private val addTaskUseCase: AddTaskUseCase,
@@ -47,38 +44,41 @@ class TaskViewModel(
     }
 
     fun reduce(action: TaskAction) {
-        viewModelScope.launch(Dispatchers.IO) {
-            when (action) {
-                LoadTasks -> handleLoadTasks()
-                is CreateTask -> handleCreateTask(action)
-                is DeleteTask -> handleDeleteTask(action)
-                is UpdateTask -> handleUpdateTask(action)
+        when (action) {
+            LoadTasks -> handleLoadTasks()
+            is CreateTask -> handleCreateTask(action)
+            is DeleteTask -> handleDeleteTask(action)
+            is UpdateTask -> handleUpdateTask(action)
+        }
+    }
+
+    private fun handleUpdateTask(action: UpdateTask) {
+        viewModelScope.launch(ioDispatcher) {
+            if (action.isCompleted) {
+                taskForDeletionJobMap[action.taskId] = coroutineContext.job
+                completeTaskUseCase.invoke(action.taskId)
+            } else {
+                taskForDeletionJobMap[action.taskId]?.cancel()
+                incompleteTaskUseCase.invoke(action.taskId)
             }
         }
     }
 
-    private suspend fun handleUpdateTask(action: UpdateTask) {
-        if (action.isCompleted) {
-            taskForDeletionJobMap[action.taskId] = coroutineContext.job
-            completeTaskUseCase.invoke(action.taskId)
-        } else {
-            taskForDeletionJobMap[action.taskId]?.cancel()
-            incompleteTaskUseCase.invoke(action.taskId)
+    private fun handleCreateTask(action: CreateTask) {
+        viewModelScope.launch(ioDispatcher) {
+            addTaskUseCase.invoke(action.task)
         }
     }
 
-    private suspend fun handleCreateTask(action: CreateTask) {
-        addTaskUseCase.invoke(action.task)
+    private fun handleDeleteTask(action: DeleteTask) {
+        viewModelScope.launch(ioDispatcher) {
+            deleteTaskUseCase.invoke(action.taskId)
+        }
     }
 
-    private suspend fun handleDeleteTask(action: DeleteTask) {
-        deleteTaskUseCase.invoke(action.taskId)
-    }
-
-    private suspend fun handleLoadTasks() {
+    private fun handleLoadTasks() {
         collectJob?.cancel()
-        withContext(ioDispatcher) {
-            collectJob = this.coroutineContext.job
+        collectJob = viewModelScope.launch(ioDispatcher) {
             getAllTasksUseCase()
                 .distinctUntilChanged()
                 .onStart { _state.value = TaskState.Loading }
